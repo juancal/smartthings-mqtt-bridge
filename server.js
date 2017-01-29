@@ -227,6 +227,36 @@ function getTopicFor (device, property, type) {
 }
 
 /**
+ * Post commands to ST
+ * @method postRequest2STHub
+ * @param  {String} device   Device Name
+ * @param  {String}    property Property
+ * @param  {String} message Contents of the event
+ */
+function postRequest2STHub (device, property, contents) {
+	winston.info('Posting request to ST hub: %s', callback);
+	winston.info('   Device: %s', device);
+	winston.info('   Property: %s', property);
+	winston.info('   Contents: %s', contents);
+
+	request.post({
+		url: 'http://' + callback,
+		json: {
+			name: device,
+			type: property,
+			value: contents
+		}
+	}, function (error, resp) {
+		if (error) {
+			// @TODO handle the response from SmartThings
+			winston.error('Error from SmartThings Hub: %s', error.toString());
+			winston.error(JSON.stringify(error, null, 4));
+			winston.error(JSON.stringify(resp, null, 4));
+		}
+	});
+}
+ 
+/**
  * Parse incoming message from MQTT
  * @method parseMQTTMessage
  * @param  {String} topic   Topic channel the event came from
@@ -266,21 +296,21 @@ function parseMQTTMessage (topic, message) {
         contents = history[topicLevelCommand];
     }
 
-    request.post({
-        url: 'http://' + callback,
-        json: {
-            name: device,
-            type: property,
-            value: contents
-        }
-    }, function (error, resp) {
-        if (error) {
-            // @TODO handle the response from SmartThings
-            winston.error('Error from SmartThings Hub: %s', error.toString());
-            winston.error(JSON.stringify(error, null, 4));
-            winston.error(JSON.stringify(resp, null, 4));
-        }
-    });
+
+    // If sending sensor data, decode the json to get the  and there is already a level value, send level instead
+    // SmartThings will turn the device on
+    if (property === 'sensor') {
+        winston.info('Passing sensor data');
+		var jsonObj = JSON.parse(contents);
+        for(var myProperty in jsonObj) {
+			postRequest2STHub (device, myProperty, jsonObj[myProperty]);
+   			//console.log("Property:"+myProperty+", value:"+jsonObj[myProperty]);
+		}
+		return;
+	}
+	
+	postRequest2STHub (device, property, contents);
+	
 }
 
 // Main flow
